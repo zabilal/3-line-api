@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Random;
 
 @Service
 @RequiredArgsConstructor
@@ -19,7 +18,10 @@ public class UserService {
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
-    private final Random random = new Random();
+    private final java.security.SecureRandom random = new java.security.SecureRandom();
+
+    @org.springframework.beans.factory.annotation.Value("${app.wallet.welcome-bonus:1000.00}")
+    private BigDecimal welcomeBonus;
 
     @Transactional
     public User registerUser(UserRegistrationRequest request) {
@@ -41,7 +43,7 @@ public class UserService {
         // Generate and link wallet
         Wallet wallet = Wallet.builder()
                 .accountNumber(generateAccountNumber())
-                .balance(new BigDecimal("1000.00")) // Welcome bonus
+                .balance(welcomeBonus)
                 .status(Wallet.WalletStatus.ACTIVE)
                 .user(savedUser)
                 .build();
@@ -53,7 +55,7 @@ public class UserService {
     }
 
     private String generateAccountNumber() {
-        // Simple 10-digit random number for demo
+        // Use SecureRandom for non-predictable account numbers
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 10; i++) {
             sb.append(random.nextInt(10));

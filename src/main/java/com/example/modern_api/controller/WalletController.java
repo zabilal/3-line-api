@@ -25,9 +25,11 @@ public class WalletController {
     @GetMapping("/{accountNumber}/balance")
     @Operation(summary = "Check wallet balance", description = "Returns the current available balance for a given account number")
     public BigDecimal getBalance(@PathVariable String accountNumber) {
-        return walletRepository.findByAccountNumber(accountNumber)
-                .map(Wallet::getBalance)
+        Wallet wallet = walletRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet not found with account: " + accountNumber));
+
+        validateOwnership(wallet);
+        return wallet.getBalance();
     }
 
     @GetMapping("/{accountNumber}/transactions")
@@ -36,6 +38,15 @@ public class WalletController {
         Wallet wallet = walletRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet not found with account: " + accountNumber));
 
+        validateOwnership(wallet);
         return transactionRepository.findBySenderWalletOrReceiverWallet(wallet, wallet);
+    }
+
+    private void validateOwnership(Wallet wallet) {
+        String currentUsername = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getName();
+        if (!wallet.getUser().getUsername().equals(currentUsername)) {
+            throw new com.example.modern_api.exception.WalletException("Access denied: You do not own this wallet");
+        }
     }
 }

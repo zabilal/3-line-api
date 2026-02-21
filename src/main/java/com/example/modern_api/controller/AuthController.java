@@ -35,7 +35,7 @@ public class AuthController {
 
         LoginResponse response = new LoginResponse();
         response.setAccessToken(token);
-        response.setExpiresIn(86400L); // 24 hours
+        response.setExpiresIn(jwtService.getExpirationTime() / 1000); // convert ms to seconds
         return response;
     }
 

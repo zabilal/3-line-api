@@ -44,6 +44,15 @@ public class TransferService {
         Wallet receiver = walletRepository.findByAccountNumber(request.getReceiverAccountNumber())
                 .orElseThrow(() -> new ResourceNotFoundException("Receiver account not found"));
 
+        // 2.1 Security Check: Ensure authenticated user owns the sender wallet
+        String currentUsername = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getName();
+        if (!sender.getUser().getUsername().equals(currentUsername)) {
+            log.warn("Unauthorized transfer attempt by user {} from account {}", currentUsername,
+                    sender.getAccountNumber());
+            throw new WalletException("Access denied: You do not own the sender account");
+        }
+
         // 3. Validations
         validateTransfer(sender, receiver, request.getAmount());
 

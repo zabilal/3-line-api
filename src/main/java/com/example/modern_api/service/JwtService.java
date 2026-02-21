@@ -17,11 +17,15 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret:vanguard-super-secret-key-32-chars-long-minimal}")
+    @Value("${jwt.secret}")
     private String secretKey;
 
     @Value("${jwt.expiration:86400000}") // 24 hours
     private long jwtExpiration;
+
+    public long getExpirationTime() {
+        return jwtExpiration;
+    }
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);

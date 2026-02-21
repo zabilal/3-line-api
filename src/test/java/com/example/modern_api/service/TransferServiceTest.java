@@ -15,6 +15,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.modern_api.domain.User;
+import org.mockito.MockedStatic;
+import org.junit.jupiter.api.AfterEach;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -42,19 +48,25 @@ class TransferServiceTest {
     private Wallet sender;
     private Wallet receiver;
     private TransferRequest request;
+    private User user;
+    private MockedStatic<SecurityContextHolder> securityContextHolderMock;
 
     @BeforeEach
     void setUp() {
+        user = User.builder().username("testuser").build();
+
         sender = Wallet.builder()
                 .accountNumber("123")
                 .balance(new BigDecimal("1000.00"))
                 .status(Wallet.WalletStatus.ACTIVE)
+                .user(user)
                 .build();
 
         receiver = Wallet.builder()
                 .accountNumber("456")
                 .balance(new BigDecimal("500.00"))
                 .status(Wallet.WalletStatus.ACTIVE)
+                .user(User.builder().username("otheruser").build())
                 .build();
 
         request = new TransferRequest();
@@ -62,6 +74,21 @@ class TransferServiceTest {
         request.setReceiverAccountNumber("456");
         request.setAmount(new BigDecimal("100.00"));
         request.setIdempotencyKey("unique-key");
+
+        // Mock SecurityContext (lenient because some tests like idempotent return
+        // early)
+        securityContextHolderMock = mockStatic(SecurityContextHolder.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+
+        securityContextHolderMock.when(SecurityContextHolder::getContext).thenReturn(securityContext);
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        lenient().when(authentication.getName()).thenReturn("testuser");
+    }
+
+    @AfterEach
+    void tearDown() {
+        securityContextHolderMock.close();
     }
 
     @Test
@@ -182,5 +209,19 @@ class TransferServiceTest {
         assertThatThrownBy(() -> transferService.transferFunds(request))
                 .isInstanceOf(WalletException.class)
                 .hasMessageContaining("Inconsistent idempotency state");
+    }
+
+    @Test
+    void transferFunds_AccessDenied() {
+        // Change sender's user to someone else
+        sender.setUser(User.builder().username("someoneelse").build());
+
+        when(idempotencyService.getResponse(anyString())).thenReturn(Optional.empty());
+        when(walletRepository.findByAccountNumber("123")).thenReturn(Optional.of(sender));
+        when(walletRepository.findByAccountNumber("456")).thenReturn(Optional.of(receiver));
+
+        assertThatThrownBy(() -> transferService.transferFunds(request))
+                .isInstanceOf(WalletException.class)
+                .hasMessageContaining("Access denied: You do not own the sender account");
     }
 }
